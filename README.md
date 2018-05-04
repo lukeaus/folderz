@@ -27,11 +27,13 @@ Say you have the following structure
     somePkg
 ```
 
-Run this command to find out your largest node_modules directories
+Run this command to find all your largest node_modules directories and sort by size (and don't show nested children.)
 
 ```
 folderz node_modules
 ```
+
+Result
 
 ```
 55 files in /myapp/node_modules
