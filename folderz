@@ -1,0 +1,170 @@
+#/bin/bash
+#
+# folderz
+#
+# List matching directories by file count.
+# Includes nested directories in file count but does not list child directories with same name.
+#
+# Args generated from https://argbash.io/generate
+
+set -euo pipefail
+# support paths with spaces
+IFS=$'\n\t'
+
+die()
+{
+	local _ret=$2
+	test -n "$_ret" || _ret=1
+	test "$_PRINT_HELP" = yes && print_help >&2
+	echo "$1" >&2
+	exit ${_ret}
+}
+
+begins_with_short_option()
+{
+	local first_option all_short_options
+	all_short_options='dpqh'
+	first_option="${1:0:1}"
+	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# THE DEFAULTS INITIALIZATION - POSITIONALS
+_positionals=()
+
+# THE DEFAULTS INITIALIZATION - OPTIONALS
+_arg_dir=/
+_arg_paths_only=false
+_add_quotes=false
+_PRINT_HELP=no
+
+print_help ()
+{
+	printf '%s\n' "List matching directories by file count."
+	printf '%s\n' "Includes nested directories in file count but does not list child directories with same name."
+  printf 'Usage: %s [-d|--dir <arg>] [-p|--paths_only <arg>] [-q|--add_quotes <arg>] [-h|--help] <search_term>\n' "$0"
+  printf '\t%s\n' "<search_term>: search term e.g. node_modules"
+	printf '\t%s\n' "-d,--dir: directory to use (default: /)"
+	printf '\t%s\n' "-p,--paths_only: display unsorted paths only (do not include file paths (default: false)"
+	printf '\t%s\n' "-q,--add_quotes: add quotes '' around paths e.g. '/some/path' (default: false)"
+	printf '\t%s\n' "-h,--help: Prints help"
+}
+
+parse_commandline ()
+{
+	while test $# -gt 0
+	do
+		_key="$1"
+		case "$_key" in
+			-d|--dir)
+				test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
+				_arg_dir="$2"
+				shift
+				;;
+			--dir=*)
+				_arg_dir="${_key##--dir=}"
+				;;
+			-d*)
+				_arg_dir="${_key##-d}"
+				;;
+			-p|--paths_only)
+				_arg_paths_only=true
+				;;
+			-q|--add_quotes)
+				_add_quotes=true
+				;;
+			-h|--help)
+				print_help
+				exit 0
+				;;
+			-h*)
+				print_help
+				exit 0
+				;;
+			*)
+				_positionals+=("$1")
+				;;
+		esac
+		shift
+	done
+}
+
+handle_passed_args_count ()
+{
+	_required_args_string="'search_term'"
+	test ${#_positionals[@]} -ge 1 || _PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require exactly 1 (namely: $_required_args_string), but got only ${#_positionals[@]}." 1
+	test ${#_positionals[@]} -le 1 || _PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect exactly 1 (namely: $_required_args_string), but got ${#_positionals[@]} (the last one was: '${_positionals[*]: -1}')." 1
+}
+
+assign_positional_args ()
+{
+	_positional_names=('_arg_search_term')
+
+	for (( ii = 0; ii < ${#_positionals[@]}; ii++))
+	do
+		eval "${_positional_names[ii]}=\${_positionals[ii]}" || die "Error during argument parsing, possibly an Argbash bug." 1
+	done
+}
+
+parse_commandline "$@"
+handle_passed_args_count
+assign_positional_args
+
+folders_found=()
+
+# https://stackoverflow.com/a/8214748/3003438
+while IFS=  read -r -d $'\0';
+do
+  folders_found+=("$REPLY")
+done < <(find $_arg_dir -type d -name $_arg_search_term -not -path "*/$_arg_search_term/*" -print0)
+
+declare -a folders_found_with_file_counts
+
+total_filecount=0;
+
+for i in "${!folders_found[@]}";
+do
+  this_dir="${folders_found[$i]}"
+  this_dir_filecount=`find $this_dir -type f | wc -l`;
+  total_filecount=$((total_filecount+this_dir_filecount))
+  folders_found_with_file_counts[$i]="$this_dir_filecount $this_dir";
+done
+
+IFS=$'\n'
+sorted=($(sort -r <<<"${folders_found_with_file_counts[*]}"))
+
+print_elem() {
+  if $_add_quotes;
+  then
+    printf '%s\n' "'$1'"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+prepare_elem() {
+  if $_arg_paths_only;
+  then
+    # ensure exclude space between count and path
+    path_without_count=$(printf "$1" | sed 's/^[0-9 ]*//')
+    print_elem $path_without_count
+  else
+    print_elem "$1"
+  fi
+}
+
+print_results()
+{
+  arr=("$@")
+  for i in "${arr[@]}";
+  do
+    prepare_elem "$i"
+  done
+}
+
+print_results "${sorted[@]}"
+
+if ! $_arg_paths_only;
+then
+  printf '%s\n' "---------------------------"
+  printf '%s\n' "$total_filecount Total (files and folders)"
+fi
