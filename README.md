@@ -47,14 +47,14 @@ Result
 # GET
 git clone https://github.com/lukeaus/folderz.git
 cd folderz
-// or copy folderz file and paste on your computer
+# or copy folderz file and paste on your computer
 
 # MAKE EXECUTABLE
 chmod +x folderz
 
 # RUN
 ./folderz some-search-term
-// or add folderz to your PATH then
+# or add folderz to your PATH then
 folderz some-search-term
 ```
 
